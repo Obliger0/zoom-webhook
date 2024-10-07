@@ -36,8 +36,8 @@ app.all('/zoom-webhook', async (req, res) => {
     // Step 2.1: Verify the secret token
     const receivedSecretToken = req.headers['authorization'];
     console.log({receivedSecretToken});
-    
-    if (!receivedSecretToken || receivedSecretToken !== `Bearer ${ZOOM_SECRET_TOKEN}`) {
+
+    if (!receivedSecretToken || receivedSecretToken !== ZOOM_SECRET_TOKEN) {
       return res.status(403).send('Invalid secret token');
     }
 
