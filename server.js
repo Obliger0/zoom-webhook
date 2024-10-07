@@ -2,6 +2,7 @@ import express from 'express';
 import dotenv  from 'dotenv';
 import fs from 'fs';
 import axios from 'axios';
+import crypto from 'crypto';
 
 dotenv.config();
 
@@ -22,6 +23,19 @@ app.all('/zoom-webhook', async (req, res) => {
   // Step 1: Handle Zoom URL verification (GET request with verification token)
   const { body, query, params, method } = req;
   console.log({ body, query, params, method });
+  if (req.body?.event === 'endpoint.url_validation') {
+    const plainToken = req.body.payload.plainToken;
+    console.log({plainToken});
+    const hashedToken = crypto
+      .createHmac('sha256', ZOOM_SECRET_TOKEN)
+      .update(plainToken)
+      .digest('hex');
+    console.log({hashedToken});
+    return res.status(200).json({
+      plainToken,
+      encryptedToken: hashedToken
+    });
+  }
   if (req.method === 'GET' && req.query['verification_token']) {
     console.log('Zoom verification token received:', req.query['verification_token']);
     if (req.query['verification_token'] === ZOOM_VERIFICATION_TOKEN) {
