@@ -63,16 +63,16 @@ app.all("/zoom-webhook", async (req, res) => {
     // Step 2.2: Process the event
     try {
       const {payload, event, download_token } = req.body;
-      console.log({...payload}, {...payload.object}, {recording_files: payload.object.recording_files});
+      console.log({...payload.object});
       // Confirming the event type (e.g., "All Recordings have completed")
       if (event === "recording.completed") {
-        const recordingFiles = payload?.object?.recording_files[0];
-        console.log({ recordingFiles });
+        const recordingFiles = payload?.object?.recording_files;
         // Download each recording file (adjust as needed)
         for (const file of recordingFiles) {
-          console.log(file);
+          console.log('file_type:', file.file_type);
           const path = `./downloads/${payload.id.id}-${file.id}.mp4`;
           if (file.file_type === "MP4") {
+            console.log(file)
             await downloadRecording(
               file.download_url,
               path,
@@ -97,13 +97,13 @@ app.all("/zoom-webhook", async (req, res) => {
 
 // Function to download the recording file
 async function downloadRecording(url, path, token) {
-  // const downloadUrl = `${url}?access_token=${ZOOM_JWT_TOKEN}`;
+  const downloadUrl = `${url}?access_token=${token}`;
   console.log({ url, path, token });
   // Create a write stream for saving the video file locally
   const writer = fs.createWriteStream(path);
 
   const response = await axios({
-    url,
+    url: downloadUrl,
     method: "GET",
     responseType: "stream",
   });
