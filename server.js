@@ -52,10 +52,10 @@ app.all("/zoom-webhook", async (req, res) => {
   // Step 2: Handle incoming POST event notifications
   if (req.method === "POST") {
     // Step 2.1: Verify the secret token
-    const receivedSecretToken = req.headers["authorization"];
-    console.log({ receivedSecretToken });
+    const receivedVerificationToken = req.headers["authorization"];
+    console.log({ receivedVerificationToken });
 
-    if (!receivedSecretToken || receivedSecretToken !== ZOOM_SECRET_TOKEN) {
+    if (!receivedVerificationToken || receivedVerificationToken !== ZOOM_VERIFICATION_TOKEN) {
       console.log("Invalid secret token")
       return res.status(403).send("Invalid secret token");
     }
@@ -63,15 +63,15 @@ app.all("/zoom-webhook", async (req, res) => {
     // Step 2.2: Process the event
     try {
       const {payload, event, download_token } = req.body;
-      console.log({...payload});
+      console.log({...payload}, {...payload.object}, {recording_files: payload.object.recording_files});
       // Confirming the event type (e.g., "All Recordings have completed")
       if (event === "recording.completed") {
-        const recordingFiles = payload.object;
+        const recordingFiles = payload?.object?.recording_files[0];
         console.log({ recordingFiles });
         // Download each recording file (adjust as needed)
         for (const file of recordingFiles) {
           console.log(file);
-          const path = `./downloads/${payload.meeting_id}-${file.id}.mp4`;
+          const path = `./downloads/${payload.id.id}-${file.id}.mp4`;
           if (file.file_type === "MP4") {
             await downloadRecording(
               file.download_url,
