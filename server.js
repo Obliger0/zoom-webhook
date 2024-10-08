@@ -69,16 +69,20 @@ app.all("/zoom-webhook", async (req, res) => {
         const recordingFiles = payload?.object?.recording_files;
         // Download each recording file (adjust as needed)
         for (const file of recordingFiles) {
-          console.log('file_type:', file.file_type);
-          const path = `./downloads/${payload.id.id}-${file.id}.mp4`;
-          if (file.file_type === "MP4") {
-            console.log(file)
-            await downloadRecording(
-              file.download_url,
-              path,
-              download_token
-            );
-            await uploadVideo(path);
+          try{
+            console.log('file_type:', file.file_type);
+            const path = `./downloads/${payload.id}-${file.id}.mp4`;
+            if (file.file_type === "MP4") {
+              console.log(file)
+              await downloadRecording(
+                file.download_url,
+                path,
+                download_token
+              );
+              await uploadVideo(path);
+            }
+          } catch(err){
+            console.log(err);
           }
         }
       }
