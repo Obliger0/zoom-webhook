@@ -1,96 +1,109 @@
-import express from 'express';
-import dotenv  from 'dotenv';
-import fs from 'fs';
-import axios from 'axios';
-import crypto from 'crypto';
+import express from "express";
+import dotenv from "dotenv";
+import fs from "fs";
+import axios from "axios";
+import crypto from "crypto";
+import { oauth2Client, uploadVideo } from "./googleUtil.js";
 
 dotenv.config();
 
 const app = express();
 const port = process.env.PORT || 8888;
 
-
 // Middleware to parse incoming JSON data
 app.use(express.json());
 
 // Replace with your Zoom JWT or OAuth token
-const ZOOM_VERIFICATION_TOKEN = process.env.ZOOM_VERIFICATION_TOKEN;  // Replace with your actual verification token
-const ZOOM_SECRET_TOKEN = process.env.ZOOM_SECRET_TOKEN;        // Replace with your actual secret token
-console.log({ZOOM_VERIFICATION_TOKEN, ZOOM_SECRET_TOKEN})
+const ZOOM_VERIFICATION_TOKEN = process.env.ZOOM_VERIFICATION_TOKEN; // Replace with your actual verification token
+const ZOOM_SECRET_TOKEN = process.env.ZOOM_SECRET_TOKEN; // Replace with your actual secret token
+console.log({ ZOOM_VERIFICATION_TOKEN, ZOOM_SECRET_TOKEN });
 
 // Webhook route
-app.all('/zoom-webhook', async (req, res) => {
+app.all("/zoom-webhook", async (req, res) => {
   // Step 1: Handle Zoom URL verification (GET request with verification token)
   const { body, query, params, method } = req;
   console.log({ body, query, params, method });
-  if (req.body?.event === 'endpoint.url_validation') {
+  if (req.body?.event === "endpoint.url_validation") {
     const plainToken = req.body.payload.plainToken;
-    console.log({plainToken});
+    console.log({ plainToken });
     const hashedToken = crypto
-      .createHmac('sha256', ZOOM_SECRET_TOKEN)
+      .createHmac("sha256", ZOOM_SECRET_TOKEN)
       .update(plainToken)
-      .digest('hex');
-    console.log({hashedToken});
+      .digest("hex");
+    console.log({ hashedToken });
     return res.status(200).json({
       plainToken,
-      encryptedToken: hashedToken
+      encryptedToken: hashedToken,
     });
   }
-  if (req.method === 'GET' && req.query['verification_token']) {
-    console.log('Zoom verification token received:', req.query['verification_token']);
-    if (req.query['verification_token'] === ZOOM_VERIFICATION_TOKEN) {
-      return res.status(200).send(req.query['verification_token']);
+  if (req.method === "GET" && req.query["verification_token"]) {
+    console.log(
+      "Zoom verification token received:",
+      req.query["verification_token"]
+    );
+    if (req.query["verification_token"] === ZOOM_VERIFICATION_TOKEN) {
+      return res.status(200).send(req.query["verification_token"]);
     } else {
-      return res.status(400).send('Invalid verification token');
+      return res.status(400).send("Invalid verification token");
     }
   }
 
   // Step 2: Handle incoming POST event notifications
-  if (req.method === 'POST') {
+  if (req.method === "POST") {
     // Step 2.1: Verify the secret token
-    const receivedSecretToken = req.headers['authorization'];
-    console.log({receivedSecretToken});
+    const receivedSecretToken = req.headers["authorization"];
+    console.log({ receivedSecretToken });
 
     if (!receivedSecretToken || receivedSecretToken !== ZOOM_SECRET_TOKEN) {
-      return res.status(403).send('Invalid secret token');
+      return res.status(403).send("Invalid secret token");
     }
 
     // Step 2.2: Process the event
     try {
       const payload = req.body;
-      console.log({...payload})
+      console.log({ ...payload });
       // Confirming the event type (e.g., "All Recordings have completed")
-      if (payload.event === 'recording.completed') {
+      if (payload.event === "recording.completed") {
         const recordingFiles = payload.payload.recording_files;
-
+        console.log({ recordingFiles });
         // Download each recording file (adjust as needed)
         for (const file of recordingFiles) {
-          if (file.file_type === 'MP4') {
-            await downloadRecording(file.download_url, payload.payload.meeting_id, file.id);
+          console.log(file);
+          const path = `./downloads/${payload.payload.meeting_id}-${file.id}.mp4`;
+          if (file.file_type === "MP4") {
+            await downloadRecording(
+              file.download_url,
+              path,
+              payload.download_token
+            );
+            await uploadVideo(path);
           }
         }
       }
 
-      res.status(200).send('Webhook received');
+      res.status(200).send("Webhook received");
     } catch (error) {
-      console.error('Error processing Zoom webhook:', error);
-      res.status(500).send('Internal Server Error');
+        console.error("Error processing Zoom webhook:", error);
+        res.status(500).send(error);
     }
+    //  finally {
+    //     fs.rmSync(filePath);
+    //     console.log(`File on path "${filePath}" deleted successfully`);
+    // }
   }
 });
 
 // Function to download the recording file
-async function downloadRecording(url, meetingId, fileId) {
+async function downloadRecording(url, path, token) {
   // const downloadUrl = `${url}?access_token=${ZOOM_JWT_TOKEN}`;
-  
+  console.log({ url, path, token });
   // Create a write stream for saving the video file locally
-  const path = `./downloads/${meetingId}-${fileId}.mp4`;
   const writer = fs.createWriteStream(path);
 
   const response = await axios({
     url,
-    method: 'GET',
-    responseType: 'stream',
+    method: "GET",
+    responseType: "stream",
   });
 
   // Pipe the video stream to the file system
@@ -98,10 +111,41 @@ async function downloadRecording(url, meetingId, fileId) {
 
   // Return a promise that resolves when the download completes
   return new Promise((resolve, reject) => {
-    writer.on('finish', resolve);
-    writer.on('error', reject);
+    writer.on("finish", resolve);
+    writer.on("error", reject);
   });
 }
+
+app.get('/callback', async (req, res) => {
+    const { code } = req.query;
+    if (!code) {
+        // Step 1: Generate and provide the authorization URL
+        const authUrl = oauth2Client.generateAuthUrl({
+            access_type: 'offline',
+            scope: [
+                "https://www.googleapis.com/auth/youtube.upload",
+                "https://www.googleapis.com/auth/youtube.download",
+                "https://www.googleapis.com/auth/youtube.force-ssl"
+            ],
+        });
+
+        console.log('Authorize this app by visiting this url:', authUrl);
+        return res.redirect(authUrl);
+    }
+
+    // Step 2: Exchange the code for tokens
+    try {
+        const { tokens } = await oauth2Client.getToken(code);
+        console.log('access_token:', tokens.access_token);
+        console.log('refresh_token:', tokens.refresh_token);
+        process.env.GOOGLE_REFRESH_TOKEN = tokens?.refresh_token || null;
+        res.send('Authorization successful! Check your console for the tokens.');
+    } catch (error) {
+        console.error('Error retrieving tokens:', error);
+        res.status(500).send('Error retrieving tokens');
+    }
+});
+
 
 app.listen(port, () => {
   console.log(`Server is running on http://localhost:${port}`);
