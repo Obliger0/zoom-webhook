@@ -23,6 +23,7 @@ app.all("/zoom-webhook", async (req, res) => {
   // Step 1: Handle Zoom URL verification (GET request with verification token)
   const { body, query, params, method } = req;
   console.log({ body, query, params, method });
+  console.log({...req.body.payload});
   if (req.body?.event === "endpoint.url_validation") {
     const plainToken = req.body.payload.plainToken;
     console.log({ plainToken });
@@ -55,6 +56,7 @@ app.all("/zoom-webhook", async (req, res) => {
     console.log({ receivedSecretToken });
 
     if (!receivedSecretToken || receivedSecretToken !== ZOOM_SECRET_TOKEN) {
+      console.log("Invalid secret token")
       return res.status(403).send("Invalid secret token");
     }
 
