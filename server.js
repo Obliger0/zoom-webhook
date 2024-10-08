@@ -4,6 +4,7 @@ import fs from "fs";
 import axios from "axios";
 import crypto from "crypto";
 import { oauth2Client, uploadVideo } from "./googleUtil.js";
+import path from "path";
 
 dotenv.config();
 
@@ -16,22 +17,18 @@ app.use(express.json());
 // Replace with your Zoom JWT or OAuth token
 const ZOOM_VERIFICATION_TOKEN = process.env.ZOOM_VERIFICATION_TOKEN; // Replace with your actual verification token
 const ZOOM_SECRET_TOKEN = process.env.ZOOM_SECRET_TOKEN; // Replace with your actual secret token
-console.log({ ZOOM_VERIFICATION_TOKEN, ZOOM_SECRET_TOKEN });
 
 // Webhook route
 app.all("/zoom-webhook", async (req, res) => {
   // Step 1: Handle Zoom URL verification (GET request with verification token)
   const { body, query, params, method } = req;
   console.log({ body, query, params, method });
-  console.log({...req.body.payload});
   if (req.body?.event === "endpoint.url_validation") {
     const plainToken = req.body.payload.plainToken;
-    console.log({ plainToken });
     const hashedToken = crypto
       .createHmac("sha256", ZOOM_SECRET_TOKEN)
       .update(plainToken)
       .digest("hex");
-    console.log({ hashedToken });
     return res.status(200).json({
       plainToken,
       encryptedToken: hashedToken,
@@ -53,7 +50,6 @@ app.all("/zoom-webhook", async (req, res) => {
   if (req.method === "POST") {
     // Step 2.1: Verify the secret token
     const receivedVerificationToken = req.headers["authorization"];
-    console.log({ receivedVerificationToken });
 
     if (!receivedVerificationToken || receivedVerificationToken !== ZOOM_VERIFICATION_TOKEN) {
       console.log("Invalid secret token")
@@ -63,7 +59,6 @@ app.all("/zoom-webhook", async (req, res) => {
     // Step 2.2: Process the event
     try {
       const {payload, event, download_token } = req.body;
-      console.log({...payload.object});
       // Confirming the event type (e.g., "All Recordings have completed")
       if (event === "recording.completed") {
         const recordingFiles = payload?.object?.recording_files;
@@ -71,15 +66,15 @@ app.all("/zoom-webhook", async (req, res) => {
         for (const file of recordingFiles) {
           try{
             console.log('file_type:', file.file_type);
-            const path = `./downloads/${payload.id}-${file.id}.mp4`;
             if (file.file_type === "MP4") {
+              const filePath = path.join(__dirname, 'downloads', `${payload?.object?.id}-${file.id}.mp4`);
               console.log(file)
               await downloadRecording(
                 file.download_url,
-                path,
+                filePath,
                 download_token
               );
-              await uploadVideo(path);
+              await uploadVideo(filePath);
             }
           } catch(err){
             console.log(err);
@@ -100,11 +95,16 @@ app.all("/zoom-webhook", async (req, res) => {
 });
 
 // Function to download the recording file
-async function downloadRecording(url, path, token) {
+async function downloadRecording(url, filePath, token) {
   const downloadUrl = `${url}?access_token=${token}`;
-  console.log({ url, path, token });
+  console.log({ url, filePath, token });
+
+  const dir = path.dirname(filePath);
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
   // Create a write stream for saving the video file locally
-  const writer = fs.createWriteStream(path);
+  const writer = fs.createWriteStream(filePath);
 
   const response = await axios({
     url: downloadUrl,
