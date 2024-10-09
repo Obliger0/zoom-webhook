@@ -21,7 +21,7 @@ const ZOOM_SECRET_TOKEN = process.env.ZOOM_SECRET_TOKEN; // Replace with your ac
 // Webhook route
 app.all("/zoom-webhook", async (req, res) => {
   // Step 1: Handle Zoom URL verification (GET request with verification token)
-  console.log({ event: body.event });
+  console.log({ event: req.body.event });
   if (req.body?.event === "endpoint.url_validation") {
     const plainToken = req.body.payload.plainToken;
     const hashedToken = crypto
