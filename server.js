@@ -1,10 +1,10 @@
-import express from "express";
-import dotenv from "dotenv";
-import fs from "fs";
-import axios from "axios";
-import crypto from "crypto";
-import { oauth2Client, uploadVideo } from "./googleUtil.js";
-import path from "path";
+const express = require("express");
+const dotenv = require("dotenv");
+const fs = require("fs");
+const axios = require("axios");
+const crypto = require("crypto");
+const { oauth2Client, uploadVideo } = require("./googleUtil");
+const path = require("path");
 
 dotenv.config();
 
@@ -21,8 +21,7 @@ const ZOOM_SECRET_TOKEN = process.env.ZOOM_SECRET_TOKEN; // Replace with your ac
 // Webhook route
 app.all("/zoom-webhook", async (req, res) => {
   // Step 1: Handle Zoom URL verification (GET request with verification token)
-  const { body, query, params, method } = req;
-  console.log({ body, query, params, method });
+  console.log({ event: body.event });
   if (req.body?.event === "endpoint.url_validation") {
     const plainToken = req.body.payload.plainToken;
     const hashedToken = crypto

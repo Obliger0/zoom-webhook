@@ -1,10 +1,10 @@
-import { google } from "googleapis";
-import fs from "fs";
-import dotenv from "dotenv";
+const { google } = require("googleapis");
+const fs = require("fs");
+const dotenv = require("dotenv");
 
 dotenv.config();
 
-export const oauth2Client = new google.auth.OAuth2(
+const oauth2Client = new google.auth.OAuth2(
   process.env.GOOGLE_CLIENT_ID,
   process.env.GOOGLE_CLIENT_SECRET,
   process.env.GOOGLE_REDIRECT_URI
@@ -19,7 +19,7 @@ const youtube = google.youtube({
   auth: oauth2Client,
 });
 
-export const startResumableUploadSession = async (
+const startResumableUploadSession = async (
   filePath,
   title,
   description
@@ -52,9 +52,15 @@ export const startResumableUploadSession = async (
   throw new Error("Failed to start upload session");
 };
 
-export const uploadVideo = async (filePath) => {
+const uploadVideo = async (filePath) => {
   const title = `Uploaded Video ${1}`;
   const description = `This video was uploaded using a resumable upload process.`;
 
   return await startResumableUploadSession(filePath, title, description);
 };
+
+module.exports = {
+  uploadVideo,
+  startResumableUploadSession,
+  oauth2Client
+}
